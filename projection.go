@@ -9,10 +9,24 @@ import (
 )
 
 type AggregateProjection interface {
+	Initialise(ctx context.Context, tx *sql.Tx) error
 	Project(ctx context.Context, tx *sql.Tx, aggregate Aggregate) error
 }
 
 type AutoProjection struct{}
+
+var _ AggregateProjection = &AutoProjection{}
+
+func (ap *AutoProjection) Initialise(ctx context.Context, tx *sql.Tx) error {
+	stmt := `create table if not exists auto_projections(
+		aggregate_id text primary key,
+		aggregate_type text not null,
+		view text not null
+	)`
+
+	_, err := tx.ExecContext(ctx, stmt)
+	return err
+}
 
 func (ap *AutoProjection) Project(ctx context.Context, tx *sql.Tx, aggregate Aggregate) error {
 	view, err := json.Marshal(aggregate)

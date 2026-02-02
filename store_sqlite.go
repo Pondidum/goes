@@ -62,22 +62,30 @@ CREATE TABLE IF NOT EXISTS events(
 	constraint aggregate_sequence unique(aggregate_id, sequence) on conflict rollback
 );
 
-create table if not exists auto_projections(
-	aggregate_id text primary key,
-	aggregate_type text not null,
-	view text not null
-);
-
 create table if not exists views(
 	name text not null primary key,
 	view text not null
 );
 `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return tracing.Error(span, err)
+	}
+	defer tx.Rollback()
 
-	if _, err := s.db.ExecContext(ctx, createTables); err != nil {
+	if _, err := tx.ExecContext(ctx, createTables); err != nil {
 		return tracing.Error(span, err)
 	}
 
+	for _, projection := range s.projections {
+		if err := projection.Initialise(ctx, tx); err != nil {
+			return tracing.Error(span, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return tracing.Error(span, err)
+	}
 	return nil
 }
 
