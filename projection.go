@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"reflect"
 )
 
 type AggregateProjection interface {
@@ -19,14 +20,16 @@ func (ap *AutoProjection) Project(ctx context.Context, tx *sql.Tx, aggregate Agg
 		return tracing.Error(span, err)
 	}
 	stmt := `
-		insert into auto_projections (aggregate_id, view)
-		values (@aggregate_id, @view)
+		insert into auto_projections (aggregate_id, aggregate_type, view)
+		values (@aggregate_id, @aggregate_type, @view)
 		on conflict(aggregate_id) do update set
+			aggregate_type = excluded.aggregate_type,
 			view = excluded.view
 	`
 	_, err = tx.ExecContext(ctx,
 		stmt,
 		sql.Named("aggregate_id", aggregate.state().id.String()),
+		sql.Named("aggregate_type", reflect.TypeOf(aggregate).Elem().Name()),
 		sql.Named("view", string(view)))
 	if err != nil {
 		return tracing.Error(span, err)

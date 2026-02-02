@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS events(
 
 create table if not exists auto_projections(
 	aggregate_id text primary key,
+	aggregate_type text not null,
 	view text not null
 );
 
