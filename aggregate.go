@@ -60,13 +60,18 @@ func nameOf(aggregate Aggregate) string {
 }
 
 func Apply[TEvent any](aggregate Aggregate, event TEvent) error {
-	eventName := reflect.TypeOf(event).Name()
+	eventType := reflect.TypeOf(event)
+	if eventType.Kind() == reflect.Pointer {
+		eventType = eventType.Elem()
+	}
+
+	eventName := eventType.Name()
 	aggregateName := nameOf(aggregate)
 
 	state := aggregate.state()
 	handler, found := state.handlers[eventName]
 	if !found {
-		return fmt.Errorf("no handler registered for %s", eventName)
+		return fmt.Errorf("apply: no handler registered for %s", eventName)
 	}
 
 	if err := handler(event); err != nil {
@@ -110,7 +115,7 @@ func (a *AggregateState) replayEvent(ed EventDescriptor) error {
 
 	handler, found := a.handlers[ed.EventType]
 	if !found {
-		return fmt.Errorf("no handler registered for %s", ed.EventType)
+		return fmt.Errorf("replay: no handler registered for %s", ed.EventType)
 	}
 
 	if err := handler(event); err != nil {
