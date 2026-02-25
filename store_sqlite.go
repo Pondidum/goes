@@ -1,7 +1,6 @@
 package goes
 
 import (
-	"brickrecon/tracing"
 	"context"
 	"database/sql"
 	"errors"
@@ -10,16 +9,14 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 var ErrNotFound = errors.New("aggregate does not exist")
-var tr = otel.Tracer("goes")
 
 type Store interface {
 	Save(ctx context.Context, aggregate Aggregate) error
 	Load(ctx context.Context, aggregateID uuid.UUID, aggregate Aggregate) error
+	Delete(ctx context.Context, aggregateID uuid.UUID) error
 }
 
 type SqliteStore struct {
@@ -47,9 +44,6 @@ func (s *SqliteStore) RegisterProjection(projection AggregateProjection) {
 }
 
 func (s *SqliteStore) Initialise(ctx context.Context) error {
-	ctx, span := tr.Start(ctx, "initialise_store")
-	defer span.End()
-
 	createTables := `
 CREATE TABLE IF NOT EXISTS events(
 	event_id integer primary key autoincrement,
@@ -69,30 +63,27 @@ create table if not exists views(
 `
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, createTables); err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 
 	for _, projection := range s.projections {
 		if err := projection.Initialise(ctx, tx); err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 	return nil
 }
 
 func (s *SqliteStore) Save(ctx context.Context, aggregate Aggregate) error {
-	ctx, span := tr.Start(ctx, "save")
-	defer span.End()
-
 	state := aggregate.state()
 	pending := len(state.pendingEvents)
 	if pending == 0 {
@@ -101,12 +92,12 @@ func (s *SqliteStore) Save(ctx context.Context, aggregate Aggregate) error {
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 	defer tx.Rollback()
 
 	if err := validateSequence(ctx, tx, state.id, state.sequence); err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 
 	if err := s.storeEvents(ctx, tx, state); err != nil {
@@ -114,15 +105,37 @@ func (s *SqliteStore) Save(ctx context.Context, aggregate Aggregate) error {
 	}
 
 	if err := s.runProjections(ctx, tx, aggregate); err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 
 	state.sequence = state.pendingEvents[pending-1].Sequence
 	state.pendingEvents = nil
+
+	return nil
+}
+
+func (s *SqliteStore) Delete(ctx context.Context, aggregateID uuid.UUID) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `delete from events where aggregate_id = @id`, sql.Named("id", aggregateID)); err != nil {
+		return err
+	}
+
+	if err := s.rebuildAllProjections(ctx, tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -174,16 +187,13 @@ func validateSequence(ctx context.Context, tx *sql.Tx, aggregateID uuid.UUID, me
 }
 
 func (s *SqliteStore) Load(ctx context.Context, aggregateID uuid.UUID, aggregate Aggregate) error {
-	ctx, span := tr.Start(ctx, "load")
-	defer span.End()
-
 	state := aggregate.state()
 	SetID(state, aggregateID)
 
 	count := 0
 	for event, err := range s.eventsFor(ctx, state.id) {
 		if err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 
 		count++
@@ -193,7 +203,6 @@ func (s *SqliteStore) Load(ctx context.Context, aggregateID uuid.UUID, aggregate
 		}
 	}
 
-	span.SetAttributes(attribute.Int("event.count", count))
 	if count == 0 {
 		return ErrNotFound
 	}
@@ -272,27 +281,36 @@ func (s *SqliteStore) allEvents(ctx context.Context, tx *sql.Tx) iter.Seq2[Event
 }
 
 func (s *SqliteStore) RebuildAll(ctx context.Context) error {
-	ctx, span := tr.Start(ctx, "rebuild")
-	defer span.End()
-
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 	defer tx.Rollback()
 
+	if err := s.rebuildAllProjections(ctx, tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SqliteStore) rebuildAllProjections(ctx context.Context, tx *sql.Tx) error {
 	aggregates := map[uuid.UUID]Aggregate{}
 
 	for _, projection := range s.projections {
 		if err := projection.Clear(ctx, tx); err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 	}
 
 	events := s.allEvents(ctx, tx)
 	for event, err := range events {
 		if err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 
 		// this should be a MRU cache really, and rather than assuming a non-existing entry means we are starting
@@ -301,7 +319,7 @@ func (s *SqliteStore) RebuildAll(ctx context.Context) error {
 		if !found {
 			factory, found := s.factory[event.AggregateType]
 			if !found {
-				return tracing.Errorf(span, "unable to find aggregate factory for '%s'", event.AggregateType)
+				return fmt.Errorf("unable to find aggregate factory for '%s'", event.AggregateType)
 			}
 
 			aggregate = factory()
@@ -310,7 +328,7 @@ func (s *SqliteStore) RebuildAll(ctx context.Context) error {
 
 		state := aggregate.state()
 		if err := state.replayEvent(event); err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 
 		// done so that projections can read the events from state
@@ -320,13 +338,9 @@ func (s *SqliteStore) RebuildAll(ctx context.Context) error {
 	for _, aggregate := range aggregates {
 
 		if err := s.runProjections(ctx, tx, aggregate); err != nil {
-			return tracing.Error(span, err)
+			return err
 		}
 
-	}
-
-	if err := tx.Commit(); err != nil {
-		return tracing.Error(span, err)
 	}
 
 	return nil
