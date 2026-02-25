@@ -283,6 +283,12 @@ func (s *SqliteStore) RebuildAll(ctx context.Context) error {
 
 	aggregates := map[uuid.UUID]Aggregate{}
 
+	for _, projection := range s.projections {
+		if err := projection.Clear(ctx, tx); err != nil {
+			return tracing.Error(span, err)
+		}
+	}
+
 	events := s.allEvents(ctx, tx)
 	for event, err := range events {
 		if err != nil {

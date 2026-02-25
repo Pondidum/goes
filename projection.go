@@ -1,7 +1,6 @@
 package goes
 
 import (
-	"brickrecon/tracing"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -11,6 +10,7 @@ import (
 type AggregateProjection interface {
 	Initialise(ctx context.Context, tx *sql.Tx) error
 	Project(ctx context.Context, tx *sql.Tx, aggregate Aggregate) error
+	Clear(ctx context.Context, tx *sql.Tx) error
 }
 
 type AutoProjection struct{}
@@ -31,7 +31,7 @@ func (ap *AutoProjection) Initialise(ctx context.Context, tx *sql.Tx) error {
 func (ap *AutoProjection) Project(ctx context.Context, tx *sql.Tx, aggregate Aggregate) error {
 	view, err := json.Marshal(aggregate)
 	if err != nil {
-		return tracing.Error(span, err)
+		return err
 	}
 	stmt := `
 		insert into auto_projections (aggregate_id, aggregate_type, view)
@@ -46,7 +46,15 @@ func (ap *AutoProjection) Project(ctx context.Context, tx *sql.Tx, aggregate Agg
 		sql.Named("aggregate_type", reflect.TypeOf(aggregate).Elem().Name()),
 		sql.Named("view", string(view)))
 	if err != nil {
-		return tracing.Error(span, err)
+		return err
+	}
+
+	return nil
+}
+
+func (ap *AutoProjection) Clear(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `delete from auto_projections`); err != nil {
+		return err
 	}
 
 	return nil
