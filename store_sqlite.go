@@ -17,6 +17,7 @@ type Store interface {
 	Save(ctx context.Context, aggregate Aggregate) error
 	Load(ctx context.Context, aggregateID uuid.UUID, aggregate Aggregate) error
 	Delete(ctx context.Context, aggregateID uuid.UUID) error
+	RebuildAll(ctx context.Context) error
 }
 
 type SqliteStore struct {
