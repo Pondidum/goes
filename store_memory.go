@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 func NewMemoryStore() *MemoryStore {

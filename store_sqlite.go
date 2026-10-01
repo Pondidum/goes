@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"uuid"
 
-	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
