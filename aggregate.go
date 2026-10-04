@@ -106,8 +106,8 @@ func AggregateID(aggregate Aggregate) uuid.UUID {
 	return aggregate.state().id
 }
 
-func SetID(state *AggregateState, id uuid.UUID) {
-	state.id = id
+func SetID(state Aggregate, id uuid.UUID) {
+	state.state().id = id
 }
 
 func (a *AggregateState) replayEvent(ed EventDescriptor) error {
