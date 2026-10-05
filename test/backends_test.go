@@ -7,8 +7,8 @@ import (
 )
 
 func TestIdea(t *testing.T) {
-
-	backend := goes.NewSqliteBackend(tempSqliteDB(t), true)
+	db := tempSqliteDB(t)
+	backend := goes.NewSqliteBackend(db, true)
 	store := goes.NewEventStore(backend)
 
 	require.NoError(t, backend.Init(t.Context()))
@@ -18,4 +18,9 @@ func TestIdea(t *testing.T) {
 	recipe.AddTag("mealprep", "true")
 
 	require.NoError(t, store.Write(t.Context(), recipe))
+
+	row := db.QueryRowContext(t.Context(), `select count(*) from events where aggregate_id = ?`, goes.AggregateID(recipe))
+	count := 0
+	require.NoError(t, row.Scan(&count))
+	require.Equal(t, 3, count)
 }

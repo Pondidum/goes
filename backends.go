@@ -35,8 +35,13 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 		return err
 	}
 
-	// unit.writeEvents(...)
+	if err := unit.writeEvents(ctx, state.pendingEvents); err != nil {
+		return err
+	}
 	// unit.projectEvents(...)
+
+	state.sequence = state.pendingEvents[pendingCount-1].Sequence
+	state.pendingEvents = nil
 
 	if err := unit.complete(); err != nil {
 		return err
@@ -54,7 +59,7 @@ type backend interface {
 
 type unitOfWork interface {
 	validateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error
-	writeEvents( /**/ )
+	writeEvents(ctx context.Context, events []EventDescriptor) error
 	projectEvents( /**/ )
 
 	complete() error
@@ -134,8 +139,8 @@ func (uow *transactionUow) validateSequence(ctx context.Context, aggregateID uui
 	return uow.inner.validateSequence(ctx, aggregateID, memorySequence)
 }
 
-func (uow *transactionUow) writeEvents() {
-	uow.inner.writeEvents()
+func (uow *transactionUow) writeEvents(ctx context.Context, events []EventDescriptor) error {
+	return uow.inner.writeEvents(ctx, events)
 }
 func (uow *transactionUow) projectEvents() {
 	uow.inner.projectEvents()
@@ -164,10 +169,32 @@ func (uow bareUow) validateSequence(ctx context.Context, aggregateID uuid.UUID, 
 	return nil
 }
 
-func (uow bareUow) writeEvents()   {}
+func (uow bareUow) writeEvents(ctx context.Context, events []EventDescriptor) error {
+	stmt := strings.TrimSpace(`
+		insert into events (aggregate_id, aggregate_type, sequence, timestamp, event_type, event_data)
+		values (?, ?, ?, ?, ?, ?)
+	`)
+
+	insertEvent, err := uow.db.PrepareContext(ctx, stmt)
+	if err != nil {
+		return err
+	}
+	defer insertEvent.Close()
+
+	for _, e := range events {
+		_, err = insertEvent.ExecContext(ctx, e.AggregateID, e.AggregateType, e.Sequence, e.Timestamp, e.EventType, e.json)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (uow bareUow) projectEvents() {}
 
 type Queryable interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
