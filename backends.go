@@ -14,7 +14,14 @@ func NewEventStore(backend backend) *eventstore {
 }
 
 type eventstore struct {
-	backend backend
+	backend     backend
+	projections []projection
+}
+
+type projection interface {
+	viewID(aggregate Aggregate) string
+	name() string
+	project(ctx context.Context, view []byte, events []EventDescriptor) error
 }
 
 func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
@@ -38,10 +45,10 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 	if err := unit.writeEvents(ctx, state.pendingEvents); err != nil {
 		return err
 	}
-	// unit.projectEvents(...)
 
-	state.sequence = state.pendingEvents[pendingCount-1].Sequence
-	state.pendingEvents = nil
+	if err := s.runProjections(ctx, unit, aggregate); err != nil {
+		return err
+	}
 
 	if err := unit.complete(); err != nil {
 		return err
@@ -53,6 +60,30 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 	return nil
 }
 
+func (s *eventstore) runProjections(ctx context.Context, unit unitOfWork, aggregate Aggregate) error {
+
+	for _, projection := range s.projections {
+		viewID := projection.viewID(aggregate) // could be the aggreateID, or something else!
+
+		// name=tags_in_use, id=1111-2222-333
+		// name=all_recipies, id=1111-2222-333
+		view, err := unit.loadView(ctx, projection.name(), viewID)
+		if err != nil {
+			return err
+		}
+
+		if err := projection.project(ctx, view, aggregate.state().pendingEvents); err != nil {
+			return err
+		}
+
+		if err := unit.saveView(ctx, projection.name(), viewID, view); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type backend interface {
 	startUnitOfWork(ctx context.Context) (unitOfWork, error)
 }
@@ -60,7 +91,9 @@ type backend interface {
 type unitOfWork interface {
 	validateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error
 	writeEvents(ctx context.Context, events []EventDescriptor) error
-	projectEvents( /**/ )
+
+	loadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
+	saveView(ctx context.Context, viewType string, viewID string, view []byte) error
 
 	complete() error
 	cancel() error
@@ -90,7 +123,15 @@ create table if not exists events(
 	event_type text not null,
 	event_data text not null,
 	constraint aggregate_sequence unique(aggregate_id, sequence) on conflict rollback
-);`)
+);
+
+create table if not exists views(
+	view_type text not null,
+	view_id text not null,
+	view text not null,
+	primary key(view_type, view_id)
+);
+`)
 
 	tx, err := b.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
@@ -142,8 +183,13 @@ func (uow *transactionUow) validateSequence(ctx context.Context, aggregateID uui
 func (uow *transactionUow) writeEvents(ctx context.Context, events []EventDescriptor) error {
 	return uow.inner.writeEvents(ctx, events)
 }
-func (uow *transactionUow) projectEvents() {
-	uow.inner.projectEvents()
+
+func (uow *transactionUow) loadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+	return uow.inner.loadView(ctx, viewType, viewID)
+}
+
+func (uow *transactionUow) saveView(ctx context.Context, viewType string, viewID string, view []byte) error {
+	return uow.inner.saveView(ctx, viewType, viewID, view)
 }
 
 type bareUow struct {
@@ -191,9 +237,37 @@ func (uow bareUow) writeEvents(ctx context.Context, events []EventDescriptor) er
 	return nil
 }
 
-func (uow bareUow) projectEvents() {}
+func (uow bareUow) loadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+	stmt := `select view from views where view_type = @type and view_id = @id`
+	row := uow.db.QueryRowContext(ctx, stmt, sql.Named("type", viewType), sql.Named("id", viewID))
+
+	var viewJson []byte
+	err := row.Scan(&viewJson)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	return viewJson, nil
+}
+
+func (uow bareUow) saveView(ctx context.Context, viewType string, viewID string, view []byte) error {
+	stmt := strings.TrimSpace(`
+	insert into
+		views(view_type, view_id, view)
+		values(@type, @id, @view)
+		on conflict(view_type, view) do update set view = excluded.view
+	`)
+
+	_, err := uow.db.ExecContext(ctx, stmt,
+		sql.Named("type", viewType),
+		sql.Named("id", viewID),
+		sql.Named("view", view))
+
+	return err
+}
 
 type Queryable interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
