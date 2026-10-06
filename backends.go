@@ -3,6 +3,7 @@ package goes
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,9 +20,13 @@ type eventstore struct {
 }
 
 type projection interface {
-	viewID(aggregate Aggregate) string
-	name() string
-	project(ctx context.Context, view []byte, events []EventDescriptor) error
+	ViewID(aggregate Aggregate) string
+	Name() string
+	Project(ctx context.Context, view []byte, aggregate Aggregate, events []EventDescriptor) ([]byte, error)
+}
+
+func (s *eventstore) RegisterProjection(projection projection) {
+	s.projections = append(s.projections, projection)
 }
 
 func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
@@ -63,20 +68,21 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 func (s *eventstore) runProjections(ctx context.Context, unit unitOfWork, aggregate Aggregate) error {
 
 	for _, projection := range s.projections {
-		viewID := projection.viewID(aggregate) // could be the aggreateID, or something else!
+		viewID := projection.ViewID(aggregate) // could be the aggreateID, or something else!
 
 		// name=tags_in_use, id=1111-2222-333
 		// name=all_recipies, id=1111-2222-333
-		view, err := unit.loadView(ctx, projection.name(), viewID)
+		view, err := unit.loadView(ctx, projection.Name(), viewID)
 		if err != nil {
 			return err
 		}
 
-		if err := projection.project(ctx, view, aggregate.state().pendingEvents); err != nil {
+		view, err = projection.Project(ctx, view, aggregate, aggregate.state().pendingEvents)
+		if err != nil {
 			return err
 		}
 
-		if err := unit.saveView(ctx, projection.name(), viewID, view); err != nil {
+		if err := unit.saveView(ctx, projection.Name(), viewID, view); err != nil {
 			return err
 		}
 	}
@@ -255,7 +261,7 @@ func (uow bareUow) saveView(ctx context.Context, viewType string, viewID string,
 	insert into
 		views(view_type, view_id, view)
 		values(@type, @id, @view)
-		on conflict(view_type, view) do update set view = excluded.view
+		on conflict(view_type, view_id) do update set view = excluded.view
 	`)
 
 	_, err := uow.db.ExecContext(ctx, stmt,
@@ -271,4 +277,20 @@ type Queryable interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
+}
+
+var _ projection = (*AutoProjector)(nil)
+
+type AutoProjector struct{}
+
+func (p *AutoProjector) ViewID(aggregate Aggregate) string {
+	return nameOf(aggregate) + ":" + AggregateID(aggregate).String()
+}
+
+func (p *AutoProjector) Name() string {
+	return "auto_projection"
+}
+
+func (p *AutoProjector) Project(ctx context.Context, view []byte, aggregate Aggregate, events []EventDescriptor) ([]byte, error) {
+	return json.Marshal(aggregate)
 }

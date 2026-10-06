@@ -8,7 +8,7 @@ import (
 func BlankRecipe() *RecipeAggregate {
 	l := &RecipeAggregate{
 		AggregateState: goes.NewAggregateState(),
-		tags:           map[string]string{},
+		Tags:           map[string]string{},
 	}
 
 	goes.Register(l.AggregateState, l.onCreated)
@@ -32,7 +32,7 @@ type RecipeAggregate struct {
 
 	Name string
 	// ingredients []string
-	tags map[string]string
+	Tags map[string]string
 }
 
 type RecipeCreated struct {
@@ -46,7 +46,7 @@ func (ta *RecipeAggregate) onCreated(e RecipeCreated) {
 }
 
 func (ta *RecipeAggregate) AddTag(name, value string) {
-	if existing, found := ta.tags[name]; found && existing == value {
+	if existing, found := ta.Tags[name]; found && existing == value {
 		return
 	}
 
@@ -57,11 +57,11 @@ func (ta *RecipeAggregate) AddTag(name, value string) {
 }
 
 func (ta *RecipeAggregate) onTagAdded(e TagAdded) {
-	ta.tags[e.Name] = e.Value
+	ta.Tags[e.Name] = e.Value
 }
 
 func (ta *RecipeAggregate) RemoveTag(name string) {
-	if _, found := ta.tags[name]; !found {
+	if _, found := ta.Tags[name]; !found {
 		return
 	}
 
@@ -71,7 +71,7 @@ func (ta *RecipeAggregate) RemoveTag(name string) {
 }
 
 func (ta *RecipeAggregate) onTagRemoved(e TagRemoved) {
-	delete(ta.tags, e.Name)
+	delete(ta.Tags, e.Name)
 }
 
 type TagAdded struct {
@@ -91,6 +91,6 @@ type RecipeView struct {
 func (l *RecipeAggregate) toView() RecipeView {
 	return RecipeView{
 		Name: l.Name,
-		Tags: l.tags,
+		Tags: l.Tags,
 	}
 }
