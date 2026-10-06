@@ -281,6 +281,10 @@ type Queryable interface {
 
 var _ projection = (*AutoProjector)(nil)
 
+type CustomAutoProjection interface {
+	AsView() ([]byte, error)
+}
+
 type AutoProjector struct{}
 
 func (p *AutoProjector) ViewID(aggregate Aggregate) string {
@@ -292,5 +296,9 @@ func (p *AutoProjector) Name() string {
 }
 
 func (p *AutoProjector) Project(ctx context.Context, view []byte, aggregate Aggregate, events []EventDescriptor) ([]byte, error) {
+	if custom, ok := aggregate.(CustomAutoProjection); ok {
+		return custom.AsView()
+	}
+
 	return json.Marshal(aggregate)
 }
