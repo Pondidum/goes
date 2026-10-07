@@ -10,12 +10,12 @@ import (
 	"uuid"
 )
 
-func NewEventStore(backend backend) *eventstore {
+func NewEventStore(backend Backend) *eventstore {
 	return &eventstore{backend: backend}
 }
 
 type eventstore struct {
-	backend     backend
+	backend     Backend
 	projections []projection
 }
 
@@ -37,17 +37,17 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 		return nil
 	}
 
-	unit, err := s.backend.startUnitOfWork(ctx)
+	unit, err := s.backend.StartUnitOfWork(ctx)
 	if err != nil {
 		return err
 	}
-	defer unit.cancel()
+	defer unit.Cancel()
 
-	if err := unit.validateSequence(ctx, state.id, state.sequence); err != nil {
+	if err := unit.ValidateSequence(ctx, state.id, state.sequence); err != nil {
 		return err
 	}
 
-	if err := unit.writeEvents(ctx, state.pendingEvents); err != nil {
+	if err := unit.WriteEvents(ctx, state.pendingEvents); err != nil {
 		return err
 	}
 
@@ -55,7 +55,7 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 		return err
 	}
 
-	if err := unit.complete(); err != nil {
+	if err := unit.Complete(); err != nil {
 		return err
 	}
 
@@ -65,14 +65,14 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 	return nil
 }
 
-func (s *eventstore) runProjections(ctx context.Context, unit unitOfWork, aggregate Aggregate) error {
+func (s *eventstore) runProjections(ctx context.Context, unit UnitOfWork, aggregate Aggregate) error {
 
 	for _, projection := range s.projections {
 		viewID := projection.ViewID(aggregate) // could be the aggreateID, or something else!
 
 		// name=tags_in_use, id=1111-2222-333
 		// name=all_recipies, id=1111-2222-333
-		view, err := unit.loadView(ctx, projection.Name(), viewID)
+		view, err := unit.LoadView(ctx, projection.Name(), viewID)
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func (s *eventstore) runProjections(ctx context.Context, unit unitOfWork, aggreg
 			return err
 		}
 
-		if err := unit.saveView(ctx, projection.Name(), viewID, view); err != nil {
+		if err := unit.SaveView(ctx, projection.Name(), viewID, view); err != nil {
 			return err
 		}
 	}
@@ -90,19 +90,19 @@ func (s *eventstore) runProjections(ctx context.Context, unit unitOfWork, aggreg
 	return nil
 }
 
-type backend interface {
-	startUnitOfWork(ctx context.Context) (unitOfWork, error)
+type Backend interface {
+	StartUnitOfWork(ctx context.Context) (UnitOfWork, error)
 }
 
-type unitOfWork interface {
-	validateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error
-	writeEvents(ctx context.Context, events []EventDescriptor) error
+type UnitOfWork interface {
+	ValidateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error
+	WriteEvents(ctx context.Context, events []EventDescriptor) error
 
-	loadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
-	saveView(ctx context.Context, viewType string, viewID string, view []byte) error
+	LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
+	SaveView(ctx context.Context, viewType string, viewID string, view []byte) error
 
-	complete() error
-	cancel() error
+	Complete() error
+	Cancel() error
 }
 
 func NewSqliteBackend(db *sql.DB, enableTransactions bool) *sqliteBackend {
@@ -111,6 +111,8 @@ func NewSqliteBackend(db *sql.DB, enableTransactions bool) *sqliteBackend {
 		transactions: enableTransactions,
 	}
 }
+
+var _ Backend = (*sqliteBackend)(nil)
 
 type sqliteBackend struct {
 	transactions bool
@@ -156,7 +158,7 @@ create table if not exists views(
 	return nil
 }
 
-func (b *sqliteBackend) startUnitOfWork(ctx context.Context) (unitOfWork, error) {
+func (b *sqliteBackend) StartUnitOfWork(ctx context.Context) (UnitOfWork, error) {
 	if !b.transactions {
 		return &bareUow{db: b.db}, nil
 	}
@@ -171,41 +173,41 @@ func (b *sqliteBackend) startUnitOfWork(ctx context.Context) (unitOfWork, error)
 
 type transactionUow struct {
 	tx    *sql.Tx
-	inner unitOfWork
+	inner UnitOfWork
 }
 
-func (uow *transactionUow) complete() error {
+func (uow *transactionUow) Complete() error {
 	return uow.tx.Commit()
 }
 
-func (uow *transactionUow) cancel() error {
+func (uow *transactionUow) Cancel() error {
 	return uow.tx.Rollback()
 }
 
-func (uow *transactionUow) validateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error {
-	return uow.inner.validateSequence(ctx, aggregateID, memorySequence)
+func (uow *transactionUow) ValidateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error {
+	return uow.inner.ValidateSequence(ctx, aggregateID, memorySequence)
 }
 
-func (uow *transactionUow) writeEvents(ctx context.Context, events []EventDescriptor) error {
-	return uow.inner.writeEvents(ctx, events)
+func (uow *transactionUow) WriteEvents(ctx context.Context, events []EventDescriptor) error {
+	return uow.inner.WriteEvents(ctx, events)
 }
 
-func (uow *transactionUow) loadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
-	return uow.inner.loadView(ctx, viewType, viewID)
+func (uow *transactionUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+	return uow.inner.LoadView(ctx, viewType, viewID)
 }
 
-func (uow *transactionUow) saveView(ctx context.Context, viewType string, viewID string, view []byte) error {
-	return uow.inner.saveView(ctx, viewType, viewID, view)
+func (uow *transactionUow) SaveView(ctx context.Context, viewType string, viewID string, view []byte) error {
+	return uow.inner.SaveView(ctx, viewType, viewID, view)
 }
 
 type bareUow struct {
 	db Queryable
 }
 
-func (uow bareUow) complete() error { return nil }
-func (uow bareUow) cancel() error   { return nil }
+func (uow bareUow) Complete() error { return nil }
+func (uow bareUow) Cancel() error   { return nil }
 
-func (uow bareUow) validateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error {
+func (uow bareUow) ValidateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error {
 	var dbSequence sql.NullInt64
 	stmt := "select max(sequence) from events where aggregate_id = ?"
 	row := uow.db.QueryRowContext(ctx, stmt, aggregateID)
@@ -221,7 +223,7 @@ func (uow bareUow) validateSequence(ctx context.Context, aggregateID uuid.UUID, 
 	return nil
 }
 
-func (uow bareUow) writeEvents(ctx context.Context, events []EventDescriptor) error {
+func (uow bareUow) WriteEvents(ctx context.Context, events []EventDescriptor) error {
 	stmt := strings.TrimSpace(`
 		insert into events (aggregate_id, aggregate_type, sequence, timestamp, event_type, event_data)
 		values (?, ?, ?, ?, ?, ?)
@@ -243,7 +245,7 @@ func (uow bareUow) writeEvents(ctx context.Context, events []EventDescriptor) er
 	return nil
 }
 
-func (uow bareUow) loadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
 	stmt := `select view from views where view_type = @type and view_id = @id`
 	row := uow.db.QueryRowContext(ctx, stmt, sql.Named("type", viewType), sql.Named("id", viewID))
 
@@ -256,7 +258,7 @@ func (uow bareUow) loadView(ctx context.Context, viewType string, viewID string)
 	return viewJson, nil
 }
 
-func (uow bareUow) saveView(ctx context.Context, viewType string, viewID string, view []byte) error {
+func (uow bareUow) SaveView(ctx context.Context, viewType string, viewID string, view []byte) error {
 	stmt := strings.TrimSpace(`
 	insert into
 		views(view_type, view_id, view)
