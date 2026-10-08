@@ -96,6 +96,10 @@ func (uow *transactionUow) WriteEvents(ctx context.Context, events []EventDescri
 	return uow.inner.WriteEvents(ctx, events)
 }
 
+func (uow *transactionUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error) {
+	return uow.inner.ReadEvents(ctx, aggregateID)
+}
+
 func (uow *transactionUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
 	return uow.inner.LoadView(ctx, viewType, viewID)
 }
@@ -147,6 +151,32 @@ func (uow bareUow) WriteEvents(ctx context.Context, events []EventDescriptor) er
 	}
 
 	return nil
+}
+
+func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error) {
+	stmt := strings.TrimSpace(`
+			select aggregate_id, sequence, timestamp, event_type, event_data
+			from events
+			where aggregate_id = @aggregate_id
+			order by sequence asc
+		`)
+	rows, err := uow.db.QueryContext(ctx, stmt, sql.Named("aggregate_id", aggregateID.String()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := []EventDescriptor{}
+	for rows.Next() {
+
+		e := EventDescriptor{}
+		if err := rows.Scan(&e.AggregateID, &e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+
+	return events, nil
 }
 
 func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {

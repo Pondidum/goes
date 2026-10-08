@@ -13,6 +13,7 @@ type Backend interface {
 type UnitOfWork interface {
 	ValidateSequence(ctx context.Context, aggregateID uuid.UUID, memorySequence int) error
 	WriteEvents(ctx context.Context, events []EventDescriptor) error
+	ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error)
 
 	LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
 	SaveView(ctx context.Context, viewType string, viewID string, view []byte) error

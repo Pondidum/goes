@@ -1,6 +1,9 @@
 package goes
 
-import "context"
+import (
+	"context"
+	"uuid"
+)
 
 func NewEventStore(backend Backend) *eventstore {
 	return &eventstore{backend: backend}
@@ -47,6 +50,32 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 
 	state.sequence = state.pendingEvents[pendingCount-1].Sequence
 	state.pendingEvents = nil
+
+	return nil
+}
+
+func (s *eventstore) Load(ctx context.Context, id uuid.UUID, aggregate Aggregate) error {
+
+	unit, err := s.backend.StartUnitOfWork(ctx)
+	if err != nil {
+		return err
+	}
+
+	events, err := unit.ReadEvents(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	state := aggregate.state()
+	for _, event := range events {
+		if err := state.replayEvent(event); err != nil {
+			return err
+		}
+	}
+
+	if err := unit.Complete(); err != nil {
+		return err
+	}
 
 	return nil
 }
