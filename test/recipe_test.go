@@ -35,7 +35,7 @@ func TestRecipe(t *testing.T) {
 
 	t.Run("loading aggregate by id", func(t *testing.T) {
 		loaded := BlankRecipe()
-		assert.NoError(t, store.Load(t.Context(), goes.AggregateID(recipe), loaded))
+		assert.NoError(t, store.Load(t.Context(), recipe.ID(), loaded))
 		assert.Equal(t, recipe.Name, loaded.Name)
 		assert.Equal(t, recipe.Tags, loaded.Tags)
 

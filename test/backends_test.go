@@ -25,7 +25,7 @@ func TestIdea(t *testing.T) {
 	require.NoError(t, store.Write(t.Context(), recipe))
 
 	t.Run("events are written", func(t *testing.T) {
-		row := db.QueryRowContext(t.Context(), `select count(*) from events where aggregate_id = ?`, goes.AggregateID(recipe))
+		row := db.QueryRowContext(t.Context(), `select count(*) from events where aggregate_id = ?`, recipe.ID())
 		count := 0
 		require.NoError(t, row.Scan(&count))
 		require.Equal(t, 3, count)
@@ -36,14 +36,14 @@ func TestIdea(t *testing.T) {
 		require.NoError(t, err)
 		defer unit.Cancel()
 
-		events, err := unit.ReadEvents(t.Context(), goes.AggregateID(recipe))
+		events, err := unit.ReadEvents(t.Context(), recipe.ID())
 		require.NoError(t, err)
 		require.Len(t, events, 3)
 	})
 
 	t.Run("aggregate can be loaded", func(t *testing.T) {
 		loaded := BlankRecipe()
-		require.NoError(t, store.Load(t.Context(), goes.AggregateID(recipe), loaded))
+		require.NoError(t, store.Load(t.Context(), recipe.ID(), loaded))
 
 		assert.Equal(t, recipe.Name, loaded.Name)
 		assert.Equal(t, recipe.Tags, loaded.Tags)

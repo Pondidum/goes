@@ -10,6 +10,7 @@ import (
 
 type Aggregate interface {
 	state() *AggregateState
+	ID() uuid.UUID
 }
 
 func NewAggregateState() *AggregateState {
@@ -30,6 +31,10 @@ type AggregateState struct {
 
 func (as *AggregateState) state() *AggregateState {
 	return as
+}
+
+func (as *AggregateState) ID() uuid.UUID {
+	return as.id
 }
 
 func Register[TEvent any](state *AggregateState, handler func(event TEvent)) {
@@ -101,10 +106,6 @@ func Apply[TEvent any](aggregate Aggregate, event TEvent) error {
 /// Save and Load
 
 ///
-
-func AggregateID(aggregate Aggregate) uuid.UUID {
-	return aggregate.state().id
-}
 
 func SetID(state Aggregate, id uuid.UUID) {
 	state.state().id = id
