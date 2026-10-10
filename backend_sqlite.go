@@ -155,7 +155,7 @@ func (uow bareUow) WriteEvents(ctx context.Context, events []EventDescriptor) er
 
 func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error) {
 	stmt := strings.TrimSpace(`
-			select aggregate_id, sequence, timestamp, event_type, event_data
+			select aggregate_id, aggregate_type, sequence, timestamp, event_type, event_data
 			from events
 			where aggregate_id = @aggregate_id
 			order by sequence asc
@@ -170,7 +170,7 @@ func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]Eve
 	for rows.Next() {
 
 		e := EventDescriptor{}
-		if err := rows.Scan(&e.AggregateID, &e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
+		if err := rows.Scan(&e.AggregateID, &e.AggregateType, &e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
