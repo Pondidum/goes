@@ -59,7 +59,7 @@ func Register[TEvent any](state *AggregateState, handler func(event TEvent)) {
 	}
 }
 
-func nameOf(aggregate Aggregate) string {
+func typeOfAggregate(aggregate Aggregate) string {
 	return reflect.TypeOf(aggregate).Elem().Name()
 }
 
@@ -70,7 +70,7 @@ func Apply[TEvent any](aggregate Aggregate, event TEvent) error {
 	}
 
 	eventName := eventType.Name()
-	aggregateName := nameOf(aggregate)
+	aggregateName := typeOfAggregate(aggregate)
 
 	state := aggregate.state()
 	handler, found := state.handlers[eventName]

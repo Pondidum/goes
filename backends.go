@@ -37,7 +37,7 @@ type CustomAutoProjection interface {
 type AutoProjector struct{}
 
 func (p *AutoProjector) ViewID(aggregate Aggregate) string {
-	return nameOf(aggregate) + ":" + aggregate.ID().String()
+	return typeOfAggregate(aggregate) + ":" + aggregate.ID().String()
 }
 
 func (p *AutoProjector) Name() string {
