@@ -60,6 +60,7 @@ func (s *eventstore) Load(ctx context.Context, id uuid.UUID, aggregate Aggregate
 	if err != nil {
 		return err
 	}
+	defer unit.Cancel()
 
 	events, err := unit.ReadEvents(ctx, id)
 	if err != nil {
