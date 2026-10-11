@@ -43,26 +43,8 @@ func (as *AggregateState) ID() uuid.UUID {
 	return as.id
 }
 
-func Register[TEvent any](state *AggregateState, handler func(event TEvent)) {
-	name := reflect.TypeOf(*new(TEvent)).Name()
-
-	state.handlers[name] = func(event any) error {
-
-		switch e := event.(type) {
-		case TEvent:
-			handler(e)
-		case *TEvent:
-			handler(*e)
-		default:
-			return fmt.Errorf("unable to handle %T", e)
-		}
-
-		return nil
-	}
-
-	eventFactory[name] = func() any {
-		return new(TEvent)
-	}
+func (as *AggregateState) Register(eventHandler handler) {
+	as.handlers[eventHandler.name] = eventHandler.action
 }
 
 func typeOfAggregate(aggregate Aggregate) string {

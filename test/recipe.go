@@ -13,9 +13,9 @@ func BlankRecipe() *RecipeAggregate {
 		apply:          apply,
 	}
 
-	goes.Register(l.AggregateState, l.onCreated)
-	goes.Register(l.AggregateState, l.onTagAdded)
-	goes.Register(l.AggregateState, l.onTagRemoved)
+	state.Register(goes.Handler(l.onCreated))
+	state.Register(goes.Handler(l.onTagAdded))
+	state.Register(goes.Handler(l.onTagRemoved))
 
 	return l
 }
