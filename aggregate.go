@@ -85,7 +85,7 @@ func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
 		Sequence:      state.sequence + len(state.pendingEvents) + 1,
 		Timestamp:     time.Now().UTC(),
 		EventType:     eventName,
-		json:          content,
+		RawEvent:      content,
 	}
 
 	state.pendingEvents = append(state.pendingEvents, descriptor)

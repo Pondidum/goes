@@ -31,6 +31,31 @@ func TestIdea(t *testing.T) {
 		require.Equal(t, 3, count)
 	})
 
+	t.Run("events fields are correct", func(t *testing.T) {
+		row := db.QueryRowContext(t.Context(),
+			`select aggregate_id, aggregate_type, sequence, timestamp, event_type, event_data  from events where aggregate_id = ? and sequence = 0`,
+			recipe.ID())
+
+		ed := goes.EventDescriptor{}
+		require.NoError(t, row.Scan(
+			&ed.AggregateID,
+			&ed.AggregateType,
+			&ed.Sequence,
+			&ed.Timestamp,
+			&ed.EventType,
+			&ed.RawEvent,
+		))
+
+		assert.Equal(t, recipe.ID(), ed.AggregateID)
+		assert.Equal(t, "RecipeAggregate", ed.AggregateType)
+		assert.Equal(t, 0, ed.Sequence)
+		assert.Equal(t, "RecipeCreated", ed.EventType)
+
+		e, err := ed.Event()
+		assert.NoError(t, err)
+		assert.Equal(t, &RecipeCreated{ID: recipe.ID(), Name: recipe.Name}, e)
+	})
+
 	t.Run("events are read", func(t *testing.T) {
 		unit, err := backend.StartUnitOfWork(t.Context())
 		require.NoError(t, err)

@@ -151,7 +151,7 @@ func (s *SqliteStore) storeEvents(ctx context.Context, tx *sql.Tx, state *Aggreg
 	}
 
 	for _, e := range state.pendingEvents {
-		_, err = insertEvent.ExecContext(ctx, e.AggregateID, e.AggregateType, e.Sequence, e.Timestamp, e.EventType, e.json)
+		_, err = insertEvent.ExecContext(ctx, e.AggregateID, e.AggregateType, e.Sequence, e.Timestamp, e.EventType, e.RawEvent)
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (s *SqliteStore) eventsFor(ctx context.Context, aggregateID uuid.UUID) iter
 				AggregateID: aggregateID,
 			}
 
-			if err := rows.Scan(&e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
+			if err := rows.Scan(&e.Sequence, &e.Timestamp, &e.EventType, &e.RawEvent); err != nil {
 				if !yield(e, err) {
 					return
 				}
@@ -268,7 +268,7 @@ func (s *SqliteStore) allEvents(ctx context.Context, tx *sql.Tx) iter.Seq2[Event
 
 			e := EventDescriptor{}
 
-			if err := rows.Scan(&e.AggregateID, &e.AggregateType, &e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
+			if err := rows.Scan(&e.AggregateID, &e.AggregateType, &e.Sequence, &e.Timestamp, &e.EventType, &e.RawEvent); err != nil {
 				if !yield(e, err) {
 					return
 				}

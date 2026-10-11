@@ -16,7 +16,7 @@ type EventDescriptor struct {
 	Timestamp     time.Time
 	EventType     string
 
-	json []byte
+	RawEvent []byte `json:"-"`
 }
 
 func (ed *EventDescriptor) Event() (any, error) {
@@ -25,7 +25,7 @@ func (ed *EventDescriptor) Event() (any, error) {
 		return nil, err
 	}
 
-	if err := json.Unmarshal(ed.json, &event); err != nil {
+	if err := json.Unmarshal(ed.RawEvent, &event); err != nil {
 		return nil, err
 	}
 

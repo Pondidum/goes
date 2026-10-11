@@ -144,7 +144,7 @@ func (uow bareUow) WriteEvents(ctx context.Context, events []EventDescriptor) er
 	defer insertEvent.Close()
 
 	for _, e := range events {
-		_, err = insertEvent.ExecContext(ctx, e.AggregateID, e.AggregateType, e.Sequence, e.Timestamp, e.EventType, e.json)
+		_, err = insertEvent.ExecContext(ctx, e.AggregateID, e.AggregateType, e.Sequence, e.Timestamp, e.EventType, e.RawEvent)
 		if err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]Eve
 	for rows.Next() {
 
 		e := EventDescriptor{}
-		if err := rows.Scan(&e.AggregateID, &e.AggregateType, &e.Sequence, &e.Timestamp, &e.EventType, &e.json); err != nil {
+		if err := rows.Scan(&e.AggregateID, &e.AggregateType, &e.Sequence, &e.Timestamp, &e.EventType, &e.RawEvent); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
