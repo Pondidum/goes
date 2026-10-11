@@ -13,11 +13,17 @@ type Aggregate interface {
 	ID() uuid.UUID
 }
 
-func NewAggregateState() *AggregateState {
-	return &AggregateState{
+func NewAggregateState[TAggregate Aggregate]() (apply func(event any) error, state *AggregateState) {
+	state = &AggregateState{
 		sequence: -1,
 		handlers: map[string]func(event any) error{},
 	}
+
+	apply = func(event any) error {
+		return applyEvent[TAggregate](state, event)
+	}
+
+	return apply, state
 }
 
 type AggregateState struct {
@@ -63,16 +69,20 @@ func typeOfAggregate(aggregate Aggregate) string {
 	return reflect.TypeOf(aggregate).Elem().Name()
 }
 
-func Apply[TEvent any](aggregate Aggregate, event TEvent) error {
+func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
+	aggregateType := reflect.TypeFor[TAggregate]()
+	if aggregateType.Kind() == reflect.Pointer {
+		aggregateType = aggregateType.Elem()
+	}
+	aggregateName := aggregateType.Name()
+
 	eventType := reflect.TypeOf(event)
 	if eventType.Kind() == reflect.Pointer {
 		eventType = eventType.Elem()
 	}
 
 	eventName := eventType.Name()
-	aggregateName := typeOfAggregate(aggregate)
 
-	state := aggregate.state()
 	handler, found := state.handlers[eventName]
 	if !found {
 		return fmt.Errorf("apply: no handler registered for %s", eventName)

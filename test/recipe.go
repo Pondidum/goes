@@ -6,9 +6,11 @@ import (
 )
 
 func BlankRecipe() *RecipeAggregate {
+	apply, state := goes.NewAggregateState[RecipeAggregate]()
 	l := &RecipeAggregate{
-		AggregateState: goes.NewAggregateState(),
+		AggregateState: state,
 		Tags:           map[string]string{},
+		apply:          apply,
 	}
 
 	goes.Register(l.AggregateState, l.onCreated)
@@ -20,7 +22,7 @@ func BlankRecipe() *RecipeAggregate {
 
 func NewRecipe(name string) *RecipeAggregate {
 	recipe := BlankRecipe()
-	goes.Apply(recipe, RecipeCreated{
+	recipe.apply(RecipeCreated{
 		ID:   uuid.New(),
 		Name: name,
 	})
@@ -29,9 +31,9 @@ func NewRecipe(name string) *RecipeAggregate {
 
 type RecipeAggregate struct {
 	*goes.AggregateState
+	apply func(event any) error
 
 	Name string
-	// ingredients []string
 	Tags map[string]string
 }
 
@@ -50,7 +52,7 @@ func (ta *RecipeAggregate) AddTag(name, value string) {
 		return
 	}
 
-	goes.Apply(ta, TagAdded{
+	ta.apply(TagAdded{
 		Name:  name,
 		Value: value,
 	})
@@ -65,7 +67,7 @@ func (ta *RecipeAggregate) RemoveTag(name string) {
 		return
 	}
 
-	goes.Apply(ta, TagRemoved{
+	ta.apply(TagRemoved{
 		Name: name,
 	})
 }
