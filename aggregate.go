@@ -51,6 +51,18 @@ func typeOfAggregate(aggregate Aggregate) string {
 	return reflect.TypeOf(aggregate).Elem().Name()
 }
 
+type NewAggregateEvent struct {
+	ID uuid.UUID
+}
+
+func (e NewAggregateEvent) AggregateID() uuid.UUID {
+	return e.ID
+}
+
+type setter interface {
+	AggregateID() uuid.UUID
+}
+
 func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
 	aggregateType := reflect.TypeFor[TAggregate]()
 	if aggregateType.Kind() == reflect.Pointer {
@@ -68,6 +80,10 @@ func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
 	handler, found := state.handlers[eventName]
 	if !found {
 		return fmt.Errorf("apply: no handler registered for %s", eventName)
+	}
+
+	if setter, ok := event.(setter); ok {
+		state.id = setter.AggregateID()
 	}
 
 	if err := handler(event); err != nil {
@@ -93,31 +109,25 @@ func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
 	return nil
 }
 
-///
-
-/// Save and Load
-
-///
-
-func SetID(state Aggregate, id uuid.UUID) {
-	state.state().id = id
-}
-
-func (a *AggregateState) replayEvent(ed EventDescriptor) error {
+func (as *AggregateState) replayEvent(ed EventDescriptor) error {
 	event, err := ed.Event()
 	if err != nil {
 		return err
 	}
 
-	handler, found := a.handlers[ed.EventType]
+	handler, found := as.handlers[ed.EventType]
 	if !found {
 		return fmt.Errorf("replay: no handler registered for %s", ed.EventType)
+	}
+
+	if setter, ok := event.(setter); ok {
+		as.id = setter.AggregateID()
 	}
 
 	if err := handler(event); err != nil {
 		return err
 	}
 
-	a.sequence = ed.Sequence
+	as.sequence = ed.Sequence
 	return nil
 }

@@ -189,10 +189,9 @@ func validateSequence(ctx context.Context, tx *sql.Tx, aggregateID uuid.UUID, me
 
 func (s *SqliteStore) Load(ctx context.Context, aggregateID uuid.UUID, aggregate Aggregate) error {
 	state := aggregate.state()
-	SetID(state, aggregateID)
 
 	count := 0
-	for event, err := range s.eventsFor(ctx, state.id) {
+	for event, err := range s.eventsFor(ctx, aggregateID) {
 		if err != nil {
 			return err
 		}

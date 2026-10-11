@@ -53,7 +53,10 @@ func TestIdea(t *testing.T) {
 
 		e, err := ed.Event()
 		assert.NoError(t, err)
-		assert.Equal(t, &RecipeCreated{ID: recipe.ID(), Name: recipe.Name}, e)
+		assert.Equal(t, &RecipeCreated{
+			NewAggregateEvent: goes.NewAggregateEvent{ID: recipe.ID()},
+			Name:              recipe.Name,
+		}, e)
 	})
 
 	t.Run("events are read", func(t *testing.T) {

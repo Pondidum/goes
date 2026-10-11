@@ -23,8 +23,8 @@ func BlankRecipe() *RecipeAggregate {
 func NewRecipe(name string) *RecipeAggregate {
 	recipe := BlankRecipe()
 	recipe.apply(RecipeCreated{
-		ID:   uuid.New(),
-		Name: name,
+		NewAggregateEvent: goes.NewAggregateEvent{ID: uuid.New()},
+		Name:              name,
 	})
 	return recipe
 }
@@ -38,12 +38,11 @@ type RecipeAggregate struct {
 }
 
 type RecipeCreated struct {
-	ID   uuid.UUID
+	goes.NewAggregateEvent
 	Name string
 }
 
 func (ta *RecipeAggregate) onCreated(e RecipeCreated) {
-	goes.SetID(ta.AggregateState, e.ID)
 	ta.Name = e.Name
 }
 
