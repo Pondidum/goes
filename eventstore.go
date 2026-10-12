@@ -40,7 +40,7 @@ func (s *eventstore) Write(ctx context.Context, aggregate Aggregate) error {
 		return err
 	}
 
-	if err := s.runProjections(ctx, unit, aggregate); err != nil {
+	if err := s.runProjections(ctx, unit, state.pendingEvents); err != nil {
 		return err
 	}
 
@@ -81,24 +81,10 @@ func (s *eventstore) Load(ctx context.Context, id uuid.UUID, aggregate Aggregate
 	return nil
 }
 
-func (s *eventstore) runProjections(ctx context.Context, unit UnitOfWork, aggregate Aggregate) error {
+func (s *eventstore) runProjections(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error {
 
 	for _, projection := range s.projections {
-		viewID := projection.ViewID(aggregate) // could be the aggreateID, or something else!
-
-		// name=tags_in_use, id=1111-2222-333
-		// name=all_recipies, id=1111-2222-333
-		view, err := unit.LoadView(ctx, projection.Name(), viewID)
-		if err != nil {
-			return err
-		}
-
-		view, err = projection.Project(ctx, view, aggregate, aggregate.state().pendingEvents)
-		if err != nil {
-			return err
-		}
-
-		if err := unit.SaveView(ctx, projection.Name(), viewID, view); err != nil {
+		if err := projection.Project(ctx, unit, pendingEvents); err != nil {
 			return err
 		}
 	}

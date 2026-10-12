@@ -11,7 +11,13 @@ import (
 
 func TestIdea(t *testing.T) {
 	db := tempSqliteDB(t)
-	ap := &goes.AutoProjector{}
+	ap := &goes.AutoProjector{
+		AggregateFactory: map[string]func() goes.Aggregate{
+			"RecipeAggregate": func() goes.Aggregate {
+				return BlankRecipe()
+			},
+		},
+	}
 	backend := goes.NewSqliteBackend(db, true)
 	store := goes.NewEventStore(backend)
 	store.RegisterProjection(ap)
@@ -81,9 +87,8 @@ func TestIdea(t *testing.T) {
 		var viewJson []byte
 
 		row := db.QueryRowContext(t.Context(),
-			`select view from views where view_type = @type and view_id = @id`,
-			sql.Named("type", ap.Name()),
-			sql.Named("id", ap.ViewID(recipe)),
+			`select view from views where view_type = 'auto_projection' and view_id = @id`,
+			sql.Named("id", "RecipeAggregate:"+recipe.ID().String()),
 		)
 		require.NoError(t, row.Scan(&viewJson))
 

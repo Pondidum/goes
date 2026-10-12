@@ -3,6 +3,7 @@ package goes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"uuid"
 )
 
@@ -23,9 +24,7 @@ type UnitOfWork interface {
 }
 
 type projection interface {
-	ViewID(aggregate Aggregate) string
-	Name() string
-	Project(ctx context.Context, view []byte, aggregate Aggregate, events []EventDescriptor) ([]byte, error)
+	Project(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error
 }
 
 var _ projection = (*AutoProjector)(nil)
@@ -34,20 +33,53 @@ type CustomAutoProjection interface {
 	AsView() ([]byte, error)
 }
 
-type AutoProjector struct{}
-
-func (p *AutoProjector) ViewID(aggregate Aggregate) string {
-	return typeOfAggregate(aggregate) + ":" + aggregate.ID().String()
+type AutoProjector struct {
+	AggregateFactory map[string]func() Aggregate
 }
 
-func (p *AutoProjector) Name() string {
-	return "auto_projection"
-}
+func (p *AutoProjector) Project(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error {
 
-func (p *AutoProjector) Project(ctx context.Context, view []byte, aggregate Aggregate, events []EventDescriptor) ([]byte, error) {
-	if custom, ok := aggregate.(CustomAutoProjection); ok {
-		return custom.AsView()
+	aggregateType := pendingEvents[0].AggregateType
+	aggregateID := pendingEvents[0].AggregateID
+
+	factory, found := p.AggregateFactory[aggregateType]
+	if !found {
+		return fmt.Errorf("no factory for %s found", aggregateType)
 	}
 
-	return json.Marshal(aggregate)
+	aggregate := factory()
+	state := aggregate.state()
+
+	writtenEvents, err := unit.ReadEvents(ctx, aggregateID)
+	if err != nil {
+		return err
+	}
+
+	// no need to replay pendingEvents, as unit has already had WriteEvents(pendingEvents) called.
+	for _, event := range writtenEvents {
+		if err := state.replayEvent(event); err != nil {
+			return err
+		}
+	}
+
+	var view []byte
+
+	if custom, ok := aggregate.(CustomAutoProjection); ok {
+		view, err = custom.AsView()
+	} else {
+		view, err = json.Marshal(aggregate)
+	}
+	if err != nil {
+		return err
+	}
+
+	viewType := "auto_projection"
+	viewID := fmt.Sprintf("%s:%s", aggregateType, aggregateID)
+
+	if err := unit.SaveView(ctx, viewType, viewID, view); err != nil {
+		return err
+	}
+
+	return nil
+
 }
