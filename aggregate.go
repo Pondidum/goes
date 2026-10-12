@@ -110,6 +110,9 @@ func applyEvent[TAggregate Aggregate](state *AggregateState, event any) error {
 }
 
 func (as *AggregateState) replayEvent(ed EventDescriptor) error {
+	if as.sequence >= ed.Sequence {
+		return fmt.Errorf("event already applied: aggregate sequence: %v, event sequence %v", as.sequence, ed.Sequence)
+	}
 	event, err := ed.Event()
 	if err != nil {
 		return err
