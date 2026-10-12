@@ -1,8 +1,6 @@
 package test
 
 import (
-	"database/sql"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,25 +9,22 @@ import (
 )
 
 func TestRecipe(t *testing.T) {
+	ctx := t.Context()
 
-	f, _ := os.CreateTemp(".", "*.db")
-	t.Cleanup(func() { os.Remove(f.Name()) })
+	backend := goes.NewSqliteBackend(tempSqliteDB(t), true)
+	require.NoError(t, backend.Init(ctx))
 
-	db, err := sql.Open("sqlite3", f.Name())
-	require.NoError(t, err)
-
-	store := goes.NewSqliteStore(db)
-	require.NoError(t, store.Initialise(t.Context()))
+	store := goes.NewEventStore(backend)
 
 	recipe := NewRecipe("some_test")
 	recipe.AddTag("type", "snack")
 
-	require.NoError(t, store.Save(t.Context(), recipe))
+	require.NoError(t, store.Write(ctx, recipe))
 
 	recipe.RemoveTag("type")
 	recipe.AddTag("style", "finnish")
 
-	require.NoError(t, store.Save(t.Context(), recipe))
+	require.NoError(t, store.Write(ctx, recipe))
 
 	// load
 
