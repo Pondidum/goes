@@ -88,10 +88,3 @@ type RecipeView struct {
 	Name string            `json:"name"`
 	Tags map[string]string `json:"tags"`
 }
-
-func (l *RecipeAggregate) toView() RecipeView {
-	return RecipeView{
-		Name: l.Name,
-		Tags: l.Tags,
-	}
-}

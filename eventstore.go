@@ -81,6 +81,41 @@ func (s *eventstore) Load(ctx context.Context, id uuid.UUID, aggregate Aggregate
 	return nil
 }
 
+// currently reads all events for a single aggregate at a time, rather than all events in order
+// i.e. local (aggregate) ordering vs global (eventstream) ordering
+func (s *eventstore) RebuildProjection(ctx context.Context, projection projection) error {
+	// optimisation for later: check if the projection is the AutoProjector, and if it is don't read
+	// events as it will do it itself, only load all aggregateIDs
+
+	unit, err := s.backend.StartUnitOfWork(ctx)
+	if err != nil {
+		return err
+	}
+	defer unit.Cancel()
+
+	ids, err := unit.AllAggregateIDs(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, aggregateID := range ids {
+		events, err := unit.ReadEvents(ctx, aggregateID)
+		if err != nil {
+			return err
+		}
+
+		if err := projection.Project(ctx, unit, events); err != nil {
+			return err
+		}
+	}
+
+	if err := unit.Complete(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *eventstore) runProjections(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error {
 
 	for _, projection := range s.projections {

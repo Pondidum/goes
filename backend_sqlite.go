@@ -100,6 +100,10 @@ func (uow *transactionUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID
 	return uow.inner.ReadEvents(ctx, aggregateID)
 }
 
+func (uow *transactionUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return uow.inner.AllAggregateIDs(ctx)
+}
+
 func (uow *transactionUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
 	return uow.inner.LoadView(ctx, viewType, viewID)
 }
@@ -177,6 +181,26 @@ func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]Eve
 	}
 
 	return events, nil
+}
+
+func (uow bareUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := uow.db.QueryContext(ctx, `select distinct aggregate_id from events`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+
 }
 
 func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {

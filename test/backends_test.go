@@ -1,7 +1,6 @@
 package test
 
 import (
-	"database/sql"
 	"encoding/json"
 	"testing"
 	"github.com/stretchr/testify/assert"
@@ -84,23 +83,37 @@ func TestIdea(t *testing.T) {
 	})
 
 	t.Run("auto projection is written", func(t *testing.T) {
-		var viewJson []byte
+		unit, err := backend.StartUnitOfWork(t.Context())
+		require.NoError(t, err)
+		defer unit.Cancel()
 
-		row := db.QueryRowContext(t.Context(),
-			`select view from views where projection_type = 'auto_projection' and view_id = @id`,
-			sql.Named("id", "RecipeAggregate:"+recipe.ID().String()),
-		)
-		require.NoError(t, row.Scan(&viewJson))
+		viewJson, err := unit.LoadView(t.Context(), "auto_projection", "RecipeAggregate:"+recipe.ID().String())
 
-		type recipeView struct {
-			Name string
-			Tags map[string]string
-		}
-
-		view := recipeView{}
+		view := RecipeView{}
 		require.NoError(t, json.Unmarshal(viewJson, &view))
 
-		require.Equal(t, recipeView{
+		require.Equal(t, RecipeView{
+			Name: "lihapulla",
+			Tags: map[string]string{
+				"tested":   "true",
+				"mealprep": "true",
+			},
+		}, view)
+	})
+
+	t.Run("projections can be rebuilt", func(t *testing.T) {
+		require.NoError(t, store.RebuildProjection(t.Context(), ap))
+
+		unit, err := backend.StartUnitOfWork(t.Context())
+		require.NoError(t, err)
+		defer unit.Cancel()
+
+		viewJson, err := unit.LoadView(t.Context(), "auto_projection", "RecipeAggregate:"+recipe.ID().String())
+
+		view := RecipeView{}
+		require.NoError(t, json.Unmarshal(viewJson, &view))
+
+		require.Equal(t, RecipeView{
 			Name: "lihapulla",
 			Tags: map[string]string{
 				"tested":   "true",

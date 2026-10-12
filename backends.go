@@ -19,6 +19,8 @@ type UnitOfWork interface {
 	LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
 	SaveView(ctx context.Context, viewType string, viewID string, view []byte) error
 
+	AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error)
+
 	Complete() error
 	Cancel() error
 }
