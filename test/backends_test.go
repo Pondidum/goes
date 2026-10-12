@@ -87,7 +87,7 @@ func TestIdea(t *testing.T) {
 		var viewJson []byte
 
 		row := db.QueryRowContext(t.Context(),
-			`select view from views where view_type = 'auto_projection' and view_id = @id`,
+			`select view from views where projection_type = 'auto_projection' and view_id = @id`,
 			sql.Named("id", "RecipeAggregate:"+recipe.ID().String()),
 		)
 		require.NoError(t, row.Scan(&viewJson))

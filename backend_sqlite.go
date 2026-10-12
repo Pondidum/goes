@@ -38,10 +38,10 @@ create table if not exists events(
 );
 
 create table if not exists views(
-	view_type text not null,
+	projection_type text not null,
 	view_id text not null,
 	view text not null,
-	primary key(view_type, view_id)
+	primary key(projection_type, view_id)
 );
 `)
 
@@ -180,7 +180,7 @@ func (uow bareUow) ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]Eve
 }
 
 func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
-	stmt := `select view from views where view_type = @type and view_id = @id`
+	stmt := `select view from views where projection_type = @type and view_id = @id`
 	row := uow.db.QueryRowContext(ctx, stmt, sql.Named("type", viewType), sql.Named("id", viewID))
 
 	var viewJson []byte
@@ -195,9 +195,9 @@ func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string)
 func (uow bareUow) SaveView(ctx context.Context, viewType string, viewID string, view []byte) error {
 	stmt := strings.TrimSpace(`
 	insert into
-		views(view_type, view_id, view)
+		views(projection_type, view_id, view)
 		values(@type, @id, @view)
-		on conflict(view_type, view_id) do update set view = excluded.view
+		on conflict(projection_type, view_id) do update set view = excluded.view
 	`)
 
 	_, err := uow.db.ExecContext(ctx, stmt,
