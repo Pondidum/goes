@@ -10,7 +10,7 @@ import (
 
 func TestIdea(t *testing.T) {
 	db := tempSqliteDB(t)
-	ap := &goes.AutoProjector{
+	ap := &goes.AutoProjection{
 		AggregateFactory: map[string]func() goes.Aggregate{
 			"RecipeAggregate": func() goes.Aggregate {
 				return BlankRecipe()
