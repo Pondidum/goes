@@ -25,11 +25,11 @@ type UnitOfWork interface {
 	Cancel() error
 }
 
-type projection interface {
+type Projection interface {
 	Project(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error
 }
 
-var _ projection = (*AutoProjector)(nil)
+var _ Projection = (*AutoProjector)(nil)
 
 type CustomAutoProjection interface {
 	AsView() ([]byte, error)

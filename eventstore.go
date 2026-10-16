@@ -11,10 +11,10 @@ func NewEventStore(backend Backend) *eventstore {
 
 type eventstore struct {
 	backend     Backend
-	projections []projection
+	projections []Projection
 }
 
-func (s *eventstore) RegisterProjection(projection projection) {
+func (s *eventstore) RegisterProjection(projection Projection) {
 	s.projections = append(s.projections, projection)
 }
 
@@ -81,9 +81,17 @@ func (s *eventstore) Load(ctx context.Context, id uuid.UUID, aggregate Aggregate
 	return nil
 }
 
+func (s *eventstore) RebuildProjection(ctx context.Context, projection Projection) error {
+	return s.rebuildProjections(ctx, []Projection{projection})
+}
+
+func (s *eventstore) RebuildAllProjections(ctx context.Context, projections []Projection) error {
+	return s.rebuildProjections(ctx, s.projections)
+}
+
 // currently reads all events for a single aggregate at a time, rather than all events in order
 // i.e. local (aggregate) ordering vs global (eventstream) ordering
-func (s *eventstore) RebuildProjection(ctx context.Context, projection projection) error {
+func (s *eventstore) rebuildProjections(ctx context.Context, projections []Projection) error {
 	// optimisation for later: check if the projection is the AutoProjector, and if it is don't read
 	// events as it will do it itself, only load all aggregateIDs
 
@@ -104,8 +112,10 @@ func (s *eventstore) RebuildProjection(ctx context.Context, projection projectio
 			return err
 		}
 
-		if err := projection.Project(ctx, unit, events); err != nil {
-			return err
+		for _, projection := range projections {
+			if err := projection.Project(ctx, unit, events); err != nil {
+				return err
+			}
 		}
 	}
 
