@@ -14,8 +14,8 @@ type UnitOfWork interface {
 	WriteEvents(ctx context.Context, events []EventDescriptor) error
 	ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error)
 
-	LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
-	SaveView(ctx context.Context, viewType string, viewID string, view []byte) error
+	ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
+	WriteView(ctx context.Context, viewType string, viewID string, view []byte) error
 	DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error
 
 	AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error)

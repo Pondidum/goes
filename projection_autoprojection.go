@@ -61,7 +61,7 @@ func (p *AutoProjection) Project(ctx context.Context, unit UnitOfWork, pendingEv
 	viewType := "auto_projection"
 	viewID := fmt.Sprintf("%s:%s", aggregateType, aggregateID)
 
-	if err := unit.SaveView(ctx, viewType, viewID, view); err != nil {
+	if err := unit.WriteView(ctx, viewType, viewID, view); err != nil {
 		return err
 	}
 

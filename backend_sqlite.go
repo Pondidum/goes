@@ -104,12 +104,12 @@ func (uow *transactionUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, er
 	return uow.inner.AllAggregateIDs(ctx)
 }
 
-func (uow *transactionUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
-	return uow.inner.LoadView(ctx, viewType, viewID)
+func (uow *transactionUow) ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+	return uow.inner.ReadView(ctx, viewType, viewID)
 }
 
-func (uow *transactionUow) SaveView(ctx context.Context, viewType string, viewID string, view []byte) error {
-	return uow.inner.SaveView(ctx, viewType, viewID, view)
+func (uow *transactionUow) WriteView(ctx context.Context, viewType string, viewID string, view []byte) error {
+	return uow.inner.WriteView(ctx, viewType, viewID, view)
 }
 
 func (uow *transactionUow) DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error {
@@ -207,7 +207,7 @@ func (uow bareUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error) {
 
 }
 
-func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
+func (uow bareUow) ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
 	stmt := `select view from views where projection_type = @type and view_id = @id`
 	row := uow.db.QueryRowContext(ctx, stmt, sql.Named("type", viewType), sql.Named("id", viewID))
 
@@ -220,7 +220,7 @@ func (uow bareUow) LoadView(ctx context.Context, viewType string, viewID string)
 	return viewJson, nil
 }
 
-func (uow bareUow) SaveView(ctx context.Context, viewType string, viewID string, view []byte) error {
+func (uow bareUow) WriteView(ctx context.Context, viewType string, viewID string, view []byte) error {
 	stmt := strings.TrimSpace(`
 	insert into
 		views(projection_type, view_id, view)
