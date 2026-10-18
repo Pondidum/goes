@@ -14,9 +14,9 @@ type UnitOfWork interface {
 	WriteEvents(ctx context.Context, events []EventDescriptor) error
 	ReadEvents(ctx context.Context, aggregateID uuid.UUID) ([]EventDescriptor, error)
 
-	ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
-	WriteView(ctx context.Context, viewType string, viewID string, view []byte) error
-	DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error
+	ReadView(ctx context.Context, spec ViewReadSpec) ([]byte, error)
+	WriteView(ctx context.Context, spec ViewWriteSpec) error
+	DeleteView(ctx context.Context, spec ViewDeleteSpec) error
 
 	AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error)
 
@@ -24,7 +24,19 @@ type UnitOfWork interface {
 	Cancel() error
 }
 
+type ViewReadSpec struct {
+	ProjectionType string
+	ViewID         string
+}
+
+type ViewWriteSpec struct {
+	ProjectionType string
+	ViewID         string
+	Contents       []byte
+}
+
 type ViewDeleteSpec struct {
-	All    bool
-	ViewID string
+	ProjectionType string
+	All            bool
+	ViewID         string
 }

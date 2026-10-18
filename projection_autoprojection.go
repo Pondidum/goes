@@ -17,8 +17,9 @@ type CustomView interface {
 }
 
 func (p *AutoProjection) Reset(ctx context.Context, unit UnitOfWork) error {
-	return unit.DeleteView(ctx, "auto_projection", ViewDeleteSpec{
-		All: true,
+	return unit.DeleteView(ctx, ViewDeleteSpec{
+		ProjectionType: "auto_projection",
+		All:            true,
 	})
 }
 
@@ -58,10 +59,13 @@ func (p *AutoProjection) Project(ctx context.Context, unit UnitOfWork, pendingEv
 		return err
 	}
 
-	viewType := "auto_projection"
-	viewID := fmt.Sprintf("%s:%s", aggregateType, aggregateID)
+	spec := ViewWriteSpec{
+		ProjectionType: "auto_projection",
+		ViewID:         fmt.Sprintf("%s:%s", aggregateType, aggregateID),
+		Contents:       view,
+	}
 
-	if err := unit.WriteView(ctx, viewType, viewID, view); err != nil {
+	if err := unit.WriteView(ctx, spec); err != nil {
 		return err
 	}
 

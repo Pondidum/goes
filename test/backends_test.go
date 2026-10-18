@@ -87,7 +87,10 @@ func TestIdea(t *testing.T) {
 		require.NoError(t, err)
 		defer unit.Cancel()
 
-		viewJson, err := unit.ReadView(t.Context(), "auto_projection", "RecipeAggregate:"+recipe.ID().String())
+		viewJson, err := unit.ReadView(t.Context(), goes.ViewReadSpec{
+			ProjectionType: "auto_projection",
+			ViewID:         "RecipeAggregate:" + recipe.ID().String(),
+		})
 
 		view := RecipeView{}
 		require.NoError(t, json.Unmarshal(viewJson, &view))
@@ -108,7 +111,10 @@ func TestIdea(t *testing.T) {
 		require.NoError(t, err)
 		defer unit.Cancel()
 
-		viewJson, err := unit.ReadView(t.Context(), "auto_projection", "RecipeAggregate:"+recipe.ID().String())
+		viewJson, err := unit.ReadView(t.Context(), goes.ViewReadSpec{
+			ProjectionType: "auto_projection",
+			ViewID:         "RecipeAggregate:" + recipe.ID().String(),
+		})
 
 		view := RecipeView{}
 		require.NoError(t, json.Unmarshal(viewJson, &view))

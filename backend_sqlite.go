@@ -104,16 +104,16 @@ func (uow *transactionUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, er
 	return uow.inner.AllAggregateIDs(ctx)
 }
 
-func (uow *transactionUow) ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
-	return uow.inner.ReadView(ctx, viewType, viewID)
+func (uow *transactionUow) ReadView(ctx context.Context, spec ViewReadSpec) ([]byte, error) {
+	return uow.inner.ReadView(ctx, spec)
 }
 
-func (uow *transactionUow) WriteView(ctx context.Context, viewType string, viewID string, view []byte) error {
-	return uow.inner.WriteView(ctx, viewType, viewID, view)
+func (uow *transactionUow) WriteView(ctx context.Context, spec ViewWriteSpec) error {
+	return uow.inner.WriteView(ctx, spec)
 }
 
-func (uow *transactionUow) DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error {
-	return uow.inner.DeleteView(ctx, viewType, spec)
+func (uow *transactionUow) DeleteView(ctx context.Context, spec ViewDeleteSpec) error {
+	return uow.inner.DeleteView(ctx, spec)
 }
 
 type bareUow struct {
@@ -207,9 +207,11 @@ func (uow bareUow) AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error) {
 
 }
 
-func (uow bareUow) ReadView(ctx context.Context, viewType string, viewID string) ([]byte, error) {
-	stmt := `select view from views where projection_type = @type and view_id = @id`
-	row := uow.db.QueryRowContext(ctx, stmt, sql.Named("type", viewType), sql.Named("id", viewID))
+func (uow bareUow) ReadView(ctx context.Context, spec ViewReadSpec) ([]byte, error) {
+	row := uow.db.QueryRowContext(ctx,
+		`select view from views where projection_type = @type and view_id = @id`,
+		sql.Named("type", spec.ProjectionType),
+		sql.Named("id", spec.ViewID))
 
 	var viewJson []byte
 	err := row.Scan(&viewJson)
@@ -220,7 +222,7 @@ func (uow bareUow) ReadView(ctx context.Context, viewType string, viewID string)
 	return viewJson, nil
 }
 
-func (uow bareUow) WriteView(ctx context.Context, viewType string, viewID string, view []byte) error {
+func (uow bareUow) WriteView(ctx context.Context, spec ViewWriteSpec) error {
 	stmt := strings.TrimSpace(`
 	insert into
 		views(projection_type, view_id, view)
@@ -228,26 +230,31 @@ func (uow bareUow) WriteView(ctx context.Context, viewType string, viewID string
 		on conflict(projection_type, view_id) do update set view = excluded.view
 	`)
 
-	_, err := uow.db.ExecContext(ctx, stmt,
-		sql.Named("type", viewType),
-		sql.Named("id", viewID),
-		sql.Named("view", view))
+	_, err := uow.db.ExecContext(ctx,
+		stmt,
+		sql.Named("type", spec.ProjectionType),
+		sql.Named("id", spec.ViewID),
+		sql.Named("view", spec.Contents))
 
 	return err
 }
 
-func (uow bareUow) DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error {
+func (uow bareUow) DeleteView(ctx context.Context, spec ViewDeleteSpec) error {
+	if strings.TrimSpace(spec.ProjectionType) == "" {
+		return fmt.Errorf("spec.ProjectionType must be specified")
+	}
+
 	if spec.All {
 		_, err := uow.db.ExecContext(ctx,
 			`delete from views where projection_type = @type`,
-			sql.Named("type", viewType))
+			sql.Named("type", spec.ProjectionType))
 
 		return err
 	}
 
 	_, err := uow.db.ExecContext(ctx,
 		`delete from views where projection_type = @type and view_id = @id`,
-		sql.Named("type", viewType),
+		sql.Named("type", spec.ProjectionType),
 		sql.Named("id", spec.ViewID))
 	return err
 }
