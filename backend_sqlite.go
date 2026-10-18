@@ -112,6 +112,10 @@ func (uow *transactionUow) SaveView(ctx context.Context, viewType string, viewID
 	return uow.inner.SaveView(ctx, viewType, viewID, view)
 }
 
+func (uow *transactionUow) DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error {
+	return uow.inner.DeleteView(ctx, viewType, spec)
+}
+
 type bareUow struct {
 	db Queryable
 }
@@ -229,6 +233,22 @@ func (uow bareUow) SaveView(ctx context.Context, viewType string, viewID string,
 		sql.Named("id", viewID),
 		sql.Named("view", view))
 
+	return err
+}
+
+func (uow bareUow) DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error {
+	if spec.All {
+		_, err := uow.db.ExecContext(ctx,
+			`delete from views where projection_type = @type`,
+			sql.Named("type", viewType))
+
+		return err
+	}
+
+	_, err := uow.db.ExecContext(ctx,
+		`delete from views where projection_type = @type and view_id = @id`,
+		sql.Named("type", viewType),
+		sql.Named("id", spec.ViewID))
 	return err
 }
 

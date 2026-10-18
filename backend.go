@@ -16,9 +16,15 @@ type UnitOfWork interface {
 
 	LoadView(ctx context.Context, viewType string, viewID string) ([]byte, error)
 	SaveView(ctx context.Context, viewType string, viewID string, view []byte) error
+	DeleteView(ctx context.Context, viewType string, spec ViewDeleteSpec) error
 
 	AllAggregateIDs(ctx context.Context) ([]uuid.UUID, error)
 
 	Complete() error
 	Cancel() error
+}
+
+type ViewDeleteSpec struct {
+	All    bool
+	ViewID string
 }
