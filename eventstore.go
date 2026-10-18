@@ -106,6 +106,12 @@ func (s *eventstore) rebuildProjections(ctx context.Context, projections []Proje
 		return err
 	}
 
+	for _, projection := range projections {
+		if err := projection.Reset(ctx, unit); err != nil {
+			return err
+		}
+	}
+
 	for _, aggregateID := range ids {
 		events, err := unit.ReadEvents(ctx, aggregateID)
 		if err != nil {

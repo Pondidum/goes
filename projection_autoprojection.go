@@ -16,6 +16,12 @@ type CustomView interface {
 	AsView() ([]byte, error)
 }
 
+func (p *AutoProjection) Reset(ctx context.Context, unit UnitOfWork) error {
+	return unit.DeleteView(ctx, "auto_projection", ViewDeleteSpec{
+		All: true,
+	})
+}
+
 func (p *AutoProjection) Project(ctx context.Context, unit UnitOfWork, pendingEvents []EventDescriptor) error {
 
 	aggregateType := pendingEvents[0].AggregateType
